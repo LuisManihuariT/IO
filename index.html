@@ -7,12 +7,12 @@
     <!-- Agregar enlace al CDN de Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 </head>
-<body class="bg-light d-flex align-items-center justify-content-center" style="height: 100vh;">
+<body class="bg-light d-flex flex-column align-items-center justify-content-center" style="min-height: 100vh;">
 
     <div class="container text-center">
         <h1 class="mb-4">Simulación de Toma de Decisiones</h1>
 
-        <div class="form-row align-items-center">
+        <div class="form-row align-items-center mb-3">
             <div class="col-auto mb-3">
                 <label for="filas" class="sr-only">Número de Filas:</label>
                 <input type="number" id="filas" class="form-control" value="2">
@@ -30,7 +30,14 @@
 
         <div id="botones" class="mb-3"></div>
 
+        <div id="alfaInputContainer" class="mb-3"></div>
+
         <p class="lead">Resultado: <span id="resultado"></span></p>
+    </div>
+
+    <!-- Tabla se coloca después del área de resultado -->
+    <div class="container mt-5">
+        <div id="tabla-container"></div>
     </div>
 
     <!-- Agregar enlace al CDN de Bootstrap JS y Popper.js (necesario para algunos componentes de Bootstrap) -->
@@ -43,7 +50,7 @@
             const filas = parseInt(document.getElementById("filas").value);
             const columnas = parseInt(document.getElementById("columnas").value);
 
-            let tablaHTML = '<table border="1">';
+            let tablaHTML = '<table class="table" border="1">';
             for (let i = 0; i < filas; i++) {
                 tablaHTML += '<tr>';
                 for (let j = 0; j < columnas; j++) {
@@ -53,17 +60,31 @@
             }
             tablaHTML += '</table>';
 
-            // Insertar la tabla en el cuerpo del documento.
-            document.body.insertAdjacentHTML('beforeend', tablaHTML);
+            // Insertar la tabla en el contenedor específico.
+            document.getElementById("tabla-container").innerHTML = tablaHTML;
 
             // Generar botones debajo de la tabla.
             const botonesHTML = '<button onclick="tomarDecision(\'Optimista\')">Optimista</button>' +
                                 '<button onclick="tomarDecision(\'Pesimista\')">Pesimista</button>' +
-                                '<button onclick="tomarDecision(\'Hurwicz\')">Hurwicz</button>' +
+                                '<button onclick="generarInputAlfa()">Hurwicz</button>' +  // Cambiado el botón y función asociada
                                 '<button onclick="tomarDecision(\'Laplace\')">Laplace</button>' +
                                 '<button onclick="tomarDecision(\'Savage\')">Savage</button>';
 
             document.getElementById("botones").innerHTML = botonesHTML;
+        }
+
+        function generarInputAlfa() {
+            const inputHTML = '<div class="input-group mb-3">' +
+                                  '<div class="input-group-prepend">' +
+                                    '<span class="input-group-text">Valor de alfa:</span>' +
+                                  '</div>' +
+                                  '<input type="number" id="alfaInput" class="form-control" step="0.01" value="0.5">' +
+                                  '<div class="input-group-append">' +
+                                    '<button class="btn btn-primary" onclick="tomarDecision(\'Hurwicz\')">Calcular</button>' +
+                                  '</div>' +
+                               '</div>';
+
+            document.getElementById("alfaInputContainer").innerHTML = inputHTML;
         }
 
         function tomarDecision(criterio) {
@@ -91,7 +112,8 @@
                     resultado = criterioPesimista(decisiones);
                     break;
                 case 'Hurwicz':
-                    resultado = criterioHurwicz(decisiones, 0.7); // Puedes ajustar el parámetro alfa según tus necesidades.
+                    const alfa = parseFloat(document.getElementById("alfaInput").value) || 0.5;
+                    resultado = criterioHurwicz(decisiones, alfa);
                     break;
                 case 'Laplace':
                     resultado = criterioLaplace(decisiones);
@@ -113,85 +135,117 @@
             // Puedes personalizar este criterio según tus necesidades.
             // Aquí simplemente se selecciona el valor máximo de la tabla.
             let maxValor = -Infinity;
-
+        
             for (let i = 0; i < decisiones.length; i++) {
                 for (let j = 0; j < decisiones[i].length; j++) {
                     maxValor = Math.max(maxValor, decisiones[i][j]);
                 }
             }
-
+        
             return `Criterio Optimista: Elegir la opción con el valor máximo (${maxValor}).`;
         }
-
+        
         function criterioPesimista(decisiones) {
-            // Implementa el criterio pesimista (minimizar los peores resultados).
-            // Puedes personalizar este criterio según tus necesidades.
-            // Aquí simplemente se selecciona el valor mínimo de la tabla.
-            let minValor = Infinity;
-
+            let maxMinimoFila = -Infinity;
+            let mejorFila;
+        
             for (let i = 0; i < decisiones.length; i++) {
-                for (let j = 0; j < decisiones[i].length; j++) {
-                    minValor = Math.min(minValor, decisiones[i][j]);
+                const minimoFila = Math.min(...decisiones[i]);
+        
+                if (minimoFila > maxMinimoFila) {
+                    maxMinimoFila = minimoFila;
+                    mejorFila = i;
                 }
             }
-
-            return `Criterio Pesimista: Elegir la opción con el valor mínimo (${minValor}).`;
+        
+            return `Criterio Pesimista: Elegir la opción con el valor mínimo más grande en la fila ${mejorFila + 1} (${maxMinimoFila}).`;
         }
-
+        
+        
+        
         function criterioHurwicz(decisiones, alfa) {
-            // Implementa el criterio de Hurwicz (combinación lineal de mejor y peor resultado).
-            // Puedes personalizar este criterio ajustando el valor de alfa (entre 0 y 1).
-            let maxValor = -Infinity;
-            let minValor = Infinity;
-
-            for (let i = 0; i < decisiones.length; i++) {
-                for (let j = 0; j < decisiones[i].length; j++) {
+            const filas = decisiones.length;
+            const columnas = decisiones[0].length;
+        
+            let maxValorHurwicz = -Infinity;
+            let mejorFila;
+        
+            for (let i = 0; i < filas; i++) {
+                let maxValor = -Infinity;
+                let minValor = Infinity;
+        
+                for (let j = 0; j < columnas; j++) {
                     maxValor = Math.max(maxValor, decisiones[i][j]);
                     minValor = Math.min(minValor, decisiones[i][j]);
                 }
-            }
-
-            const valorHurwicz = alfa * maxValor + (1 - alfa) * minValor;
-
-            return `Criterio de Hurwicz: Elegir la opción con el valor combinado (${valorHurwicz}).`;
-        }
-
-        function criterioLaplace(decisiones) {
-            // Implementa el criterio de Laplace (valor esperado uniforme).
-            // Puedes personalizar este criterio según tus necesidades.
-            // Aquí simplemente se calcula el valor esperado promedio de la tabla.
-            let sumaValores = 0;
-
-            for (let i = 0; i < decisiones.length; i++) {
-                for (let j = 0; j < decisiones[i].length; j++) {
-                    sumaValores += decisiones[i][j];
+        
+                const valorHurwicz = alfa * maxValor + (1 - alfa) * minValor;
+        
+                if (valorHurwicz > maxValorHurwicz) {
+                    maxValorHurwicz = valorHurwicz;
+                    mejorFila = i + 1;
                 }
             }
-
-            const valorEsperado = sumaValores / (decisiones.length * decisiones[0].length);
-
-            return `Criterio de Laplace: Elegir la opción con el valor esperado promedio (${valorEsperado}).`;
+        
+            return `Criterio de Hurwicz: Elegir la opción con el valor combinado máximo en la fila ${mejorFila} (${maxValorHurwicz}).`;
         }
-
-        function criterioSavage(decisiones) {
-            // Implementa el criterio de Savage (mínima pérdida).
-            // Puedes personalizar este criterio según tus necesidades.
-            // Aquí simplemente se selecciona la opción que minimiza la pérdida esperada.
-            const perdidasEsperadas = [];
-
-            for (let i = 0; i < decisiones[0].length; i++) {
-                const columnValues = decisiones.map(row => row[i]);
-                const maxValor = Math.max(...columnValues);
-                perdidasEsperadas.push(maxValor - columnValues);
+        
+        
+        function criterioLaplace(decisiones) {
+            const filas = decisiones.length;
+            const columnas = decisiones[0].length;
+        
+            const sumasPorFila = [];
+            const resultados = new Array(filas).fill(0); // Matriz de una columna para almacenar resultados.
+        
+            for (let i = 0; i < filas; i++) {
+                let sumaFila = 0;
+        
+                for (let j = 0; j < columnas; j++) {
+                    sumaFila += decisiones[i][j] / filas;
+                }
+        
+                sumasPorFila.push(sumaFila);
+                resultados[i] = sumaFila; // Almacenar el resultado en la matriz.
             }
-
-            const sumasPerdidas = perdidasEsperadas.map(row => row.reduce((acc, val) => acc + val, 0));
-            const maxPerdidaEsperada = Math.max(...sumasPerdidas);
-            const mejorDecisionIndex = sumasPerdidas.indexOf(maxPerdidaEsperada);
-
-            return `Criterio de Savage: Elegir la opción que minimiza la pérdida esperada (${maxPerdidaEsperada}), tomando la decisión en la columna ${mejorDecisionIndex + 1}.`;
+        
+            const maxSumaFila = Math.max(...sumasPorFila);
+            const mejorFila = sumasPorFila.indexOf(maxSumaFila) + 1;
+        
+            // Mostrar el resultado como un número.
+            const resultadoNumerico = parseFloat(maxSumaFila.toFixed(2));
+        
+            return `Criterio de Laplace: Elegir la opción con la suma máxima de valores promedio por fila (Fila ${mejorFila}). Resultado: ${resultadoNumerico}.`;
         }
+        
+        function criterioSavage(decisiones) {
+            const filas = decisiones.length;
+            const columnas = decisiones[0].length;
+        
+            // Transponer la matriz original.
+            const transpuesta = decisiones[0].map((_, i) => decisiones.map(row => row[i]));
+        
+            // Calcular las pérdidas para cada fila.
+            const perdidasFilas = transpuesta.map(column => {
+                const maxValor = Math.max(...column);
+                return column.map(valor => maxValor - valor);
+            });
+        
+            // Transponer nuevamente la matriz de pérdidas.
+            const perdidasColumnas = perdidasFilas[0].map((_, i) => perdidasFilas.map(row => row[i]));
+        
+            // Calcular la suma de pérdidas para cada columna.
+            const sumasPerdidas = perdidasColumnas.map(row => row.reduce((acc, val) => acc + val, 0));
+        
+            // Encontrar la fila con la menor pérdida total.
+            const mejorFilaIndex = sumasPerdidas.indexOf(Math.min(...sumasPerdidas)) + 1;
+        
+            const minPerdidaTotal = Math.min(...sumasPerdidas);
+        
+            return `Criterio de Savage: Elegir la opción que minimiza la pérdida esperada (${minPerdidaTotal}), tomando la decisión en la fila ${mejorFilaIndex}.`;
+        }        
+
     </script>
+
 </body>
 </html>
-
